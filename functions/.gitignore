@@ -1,0 +1,4 @@
+node_modules/
+*.local
+.env
+vision-service-account.json
