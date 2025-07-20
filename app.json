@@ -1,33 +1,65 @@
 {
   "expo": {
-    "name": "expo-verification-app",
-    "slug": "expo-verification-app",
+    "name": "PreLink",
+    "slug": "PreLink",
     "version": "1.0.0",
     "orientation": "portrait",
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera to take your ID and selfie for verification.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to upload verification images.",
+        "NSPhotoLibraryAddUsageDescription": "This app needs access to save captured images.",
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      },
+      "bundleIdentifier": "com.yourcompany.prelink"
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
-      "edgeToEdgeEnabled": true
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.yourcompany.prelink"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow PreLink to access your photo library to verify your identity.",
+          "cameraPermission": "Allow PreLink to use your camera to verify your ID and take a selfie."
+        }
+      ],
+      "expo-web-browser",
+      "expo-asset"
+    ],
     "extra": {
       "eas": {
-        "projectId": "aa28e250-f002-412a-908e-f7d5c6385f5b"
+        "projectId": "0bfb01e0-4f46-4648-990b-7e877b00f6c5"
       }
     }
   }
