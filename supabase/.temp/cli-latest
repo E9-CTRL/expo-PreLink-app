@@ -1,1 +1,295 @@
-v2.30.4
+                import dotenv from 'dotenv';
+                dotenv.config();
+                
+                import express from 'express';
+                import multer from 'multer';
+                import AWS from 'aws-sdk';
+                import cors from 'cors';
+                import fs from 'fs';
+                import path from 'path';
+                import axios from 'axios';
+                import { createClient } from '@supabase/supabase-js';
+                
+                // ─── NEW UTILS ─────────────────────────────────────────────────────────────────
+                import validatePassportFields from './utils/validatePassportFields.js';
+                import validatePassport from './utils/validatePassport.js';
+                import validateMRZ from './utils/validateMRZ.js';
+                import validateNTUCard from './utils/validateNTUCard.js';
+                import matchNames from './utils/matchNames.js';
+                import validateDOB from './utils/validateDOB.js';
+                import confidenceTriage from './utils/confidenceTriage.js';
+                
+                const app = express();
+                const upload = multer({ dest: 'uploads/' });
+                
+                app.use(cors());
+                app.use(express.json());
+                
+                // ─── AWS CONFIG ───────────────────────────────────────────────────────────────
+                AWS.config.update({
+                    region: process.env.AWS_REGION || 'eu-west-2',
+                    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+                    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+                });
+                const rekognition = new AWS.Rekognition();
+                const textract = new AWS.Textract();
+                
+                // ─── SUPABASE CLIENT ───────────────────────────────────────────────────────────
+                const supabase = createClient(
+                    process.env.SUPABASE_URL,
+                    process.env.SUPABASE_SERVICE_ROLE_KEY
+                );
+                
+                // ─── HEALTHCHECK ──────────────────────────────────────────────────────────────
+                app.get('/', (req, res) => {
+                    res.send('✅ PreLink Verification Server is alive');
+                });
+                
+                // ─── MAIN VERIFICATION ENDPOINT ────────────────────────────────────────────────
+                app.post(
+                    '/compare-faces',
+                    upload.fields([
+                        { name: 'selfie', maxCount: 1 },
+                        { name: 'idCard', maxCount: 1 },
+                        { name: 'ntuCardFront', maxCount: 1 }
+                    ]),
+                    async (req, res) => {
+                        const uid = req.body.uid || 'unknown-user';
+                        console.log('🚀 Verification request received for UID:', uid);
+                
+                        try {
+                            // 1) FILE PRESENCE
+                            const { selfie, idCard, ntuCardFront } = req.files;
+                            if (!selfie || !idCard || !ntuCardFront) {
+                                console.error('❌ Missing one or more required files.');
+                                return res
+                                    .status(400)
+                                    .json({ success: false, error: 'selfie, idCard & ntuCardFront are all required' });
+                            }
+                
+                            // 2) READ INTO BUFFERS
+                            const selfieBuf = fs.readFileSync(path.resolve(selfie[0].path));
+                            const idBuf = fs.readFileSync(path.resolve(idCard[0].path));
+                            const ntuBuf = fs.readFileSync(path.resolve(ntuCardFront[0].path));
+                            console.log('📂 Files read successfully');
+                
+                            // 2.5) PREVIEW TEXTRACT EXTRACTED TEXT (optional debug step)
+                            try {
+                                const textractResult = await textract.detectDocumentText({
+                                    Document: { Bytes: idBuf }
+                                }).promise();
+                
+                                const extractedTextLines = textractResult.Blocks
+                                    .filter(b => b.BlockType === 'LINE')
+                                    .map(b => b.Text);
+                
+                                console.log('🧾 Raw Textract LINEs:', extractedTextLines);
+                            } catch (err) {
+                                console.error('⚠️ Textract raw preview failed (this does NOT affect validator):', err.message);
+                            }
+                
+                            // 3) FACE MATCHING
+                            const compareFaces = async (src, tgt) => {
+                                const { FaceMatches = [] } = await rekognition
+                                    .compareFaces({
+                                        SourceImage: { Bytes: src },
+                                        TargetImage: { Bytes: tgt },
+                                        SimilarityThreshold: 95
+                                    })
+                                    .promise();
+                                return FaceMatches[0]?.Similarity || 0;
+                            };
+                
+                            const simSelfieID = await compareFaces(selfieBuf, idBuf);
+                            const simSelfieNTU = await compareFaces(selfieBuf, ntuBuf);
+                            const simIDNTU = await compareFaces(idBuf, ntuBuf);
+                
+                            const matchSelfieID = simSelfieID >= 95;
+                            const matchSelfieNTU = simSelfieNTU >= 95;
+                            const matchIDNTU = simIDNTU >= 95;
+                            const overallFaceMatch = matchSelfieID && matchSelfieNTU && matchIDNTU;
+                
+                            console.log('🧠 Face Match Results:', {
+                                simSelfieID, simSelfieNTU, simIDNTU,
+                                matchSelfieID, matchSelfieNTU, matchIDNTU
+                            });
+                
+                            // 4) OCR FOR ID & NTU
+                            const [idOcr, ntuText] = await Promise.all([
+                                validatePassportFields(idBuf),
+                                axios
+                                    .post(
+                                        `${process.env.GOOGLE_VISION_BASE}?key=${encodeURIComponent(process.env.GOOGLE_VISION_API_KEY)}`,
+                                        { requests: [{ image: { content: ntuBuf.toString('base64') }, features: [{ type: 'TEXT_DETECTION' }] }] },
+                                        { headers: { 'Content-Type': 'application/json' }, timeout: 60000 }
+                                    )
+                                    .then(r => r.data.responses?.[0]?.fullTextAnnotation?.text || '')
+                            ]);
+                
+                            console.log('🔍 Passport fields:', idOcr.fields);
+                            console.log('🔍 Passport confidences:', idOcr.confidences);
+                            console.log('📄 NTU OCR Extracted:', ntuText);
+                            console.log('📤 Raw Textract result:', {
+                                fields: idOcr.fields,
+                                confidences: idOcr.confidences,
+                            });
+                
+                
+                            if (!idOcr || typeof idOcr.fields !== 'object') {
+                                console.error('❌ Textract failed – no passport fields extracted');
+                                return res.status(500).json({
+                                    success: false,
+                                    error: 'Textract failed to extract fields from passport image'
+                                });
+                            }
+                
+                            const dobRawInput = idOcr.fields?.['Date of birth'];
+                            console.log('[validateDOB] raw input:', dobRawInput);
+                
+                            const dobResult = dobRawInput
+                                ? validateDOB(dobRawInput)
+                                : { valid: false, reason: 'No DOB field extracted' };
+                
+                
+                            if (!idOcr || !idOcr.fields || typeof idOcr.fields !== 'object') {
+                                console.error('❌ Textract failed — no passport fields extracted:', idOcr);
+                                return res.status(500).json({
+                                    success: false,
+                                    error: 'Textract failed to extract fields from passport image'
+                                });
+                            }
+                
+                            console.log('🧾 Textract extracted field keys:', Object.keys(idOcr?.fields || {}));
+                            const passportResult = validatePassport({
+                                fields: idOcr.fields,
+                                confidences: idOcr.confidences || {}
+                            });
+                
+                            const mrzResult = (idOcr.fields?.['MRZ Line1'] && idOcr.fields?.['MRZ Line2'])
+                                ? validateMRZ(idOcr.fields['MRZ Line1'], idOcr.fields['MRZ Line2'])
+                                : { valid: false, reason: 'missing MRZ lines' };
+                
+                            const ntuResult = validateNTUCard(ntuText);
+                
+                            console.log('✅ Utility results:', { passportResult, mrzResult, dobResult, ntuResult });
+                
+                            // 6) MATCH NAMES & BUSINESS LOGIC
+                            const extractedName =
+                                passportResult.firstName && passportResult.lastName
+                                    ? `${passportResult.firstName} ${passportResult.lastName}`
+                                    : null;
+                            const extractedDOB = passportResult.dob || dobResult.dob;
+                            const ntuName = ntuResult.name;
+                            const ntuMatch = extractedName && ntuName
+                                ? matchNames(ntuName, extractedName)
+                                : false;
+                            const success = overallFaceMatch &&
+                                ntuMatch &&
+                                passportResult.valid &&
+                                ntuResult.valid;
+                
+                            // 7) CONFIDENCE TRIAGE
+                            const { manualReview, lowConfidenceFields } = confidenceTriage(idOcr.confidences);
+                            const status = manualReview ? 'manual_review' : success ? 'success' : 'no_match';
+                
+                            // 8) PERSIST & RESPOND
+                
+                            console.log('🧾 FINAL VERIFICATION SUMMARY ------------------------------');
+                            console.log('✅ Name:', extractedName);
+                            console.log('🎂 DOB:', extractedDOB);
+                            console.log('🪪 NTU Name:', ntuName);
+                            console.log('🤝 Name Match:', ntuMatch);
+                            console.log('🧠 Face Matches:', { matchSelfieID, matchSelfieNTU, matchIDNTU });
+                            console.log('📈 Similarities:', { simSelfieID, simSelfieNTU, simIDNTU });
+                            console.log('📋 Passport Result:', passportResult);
+                            console.log('📋 MRZ Valid:', mrzResult);
+                            console.log('📋 DOB Valid:', dobResult);
+                            console.log('📋 NTU Result:', ntuResult);
+                            console.log('📤 Status:', status);
+                            console.log('🔍 Manual Review Fields:', lowConfidenceFields);
+                            console.log('🧾 ----------------------------------------------------------');
+                            const { data, error } = await supabase
+                                .from('verifications')
+                                .insert([{
+                                    uid,
+                                    status,
+                                    similarity: Math.min(simSelfieID, simSelfieNTU, simIDNTU),
+                                    name: extractedName,
+                                    dob: extractedDOB,
+                                    ntuName,
+                                    ntuMatch,
+                                    method: 'rekogn + ocr',
+                                    timestamp: new Date().toISOString(),
+                                    raw_ocr: idOcr.rawBlocks,
+                                    field_confidence: idOcr.confidences
+                                }])
+                                .select('id');
+                
+                            if (error) throw error;
+                            const verificationId = data[0].id;
+                            console.log('📥 Logged to Supabase (id=', verificationId, ')');
+                
+                            if (manualReview) {
+                                await supabase
+                                    .from('manual_reviews')
+                                    .insert([{
+                                        verification_id: verificationId,
+                                        issues: lowConfidenceFields
+                                    }]);
+                            }
+                
+                            res.json({
+                                success,
+                                status,
+                                matches: {
+                                    selfieToID: matchSelfieID,
+                                    selfieToNTU: matchSelfieNTU,
+                                    idToNTU: matchIDNTU,
+                                    ntuToPassport: ntuMatch
+                                },
+                                similarities: {
+                                    selfieToID: simSelfieID,
+                                    selfieToNTU: simSelfieNTU,
+                                    idToNTU: simIDNTU
+                                },
+                                extracted: {
+                                    passportName: extractedName,
+                                    dob: extractedDOB,
+                                    ntuName
+                                },
+                                utils: {
+                                    passport: passportResult,
+                                    mrz: mrzResult,
+                                    ntu: ntuResult
+                                },
+                                manualReview,
+                                lowConfidenceFields,
+                                verificationId
+                            });
+                
+                        } catch (err) {
+                            console.error('❌ Verification failed:', err);
+                            await supabase.from('verifications').insert([{
+                                uid,
+                                status: 'failed',
+                                error: err.message,
+                                method: 'rekogn + ocr',
+                                timestamp: new Date().toISOString()
+                            }]);
+                            res.status(500).json({ success: false, error: err.message });
+                        }
+                    }
+                );
+                
+                // ─── HEALTHCHECK (alternate) ───────────────────────────────────────────────────
+                app.get('/health', (_, res) => {
+                    res.status(200).json({ status: 'ok', uptime: process.uptime() });
+                });
+                
+                const PORT = process.env.PORT || 10000;
+                const server = app.listen(PORT, () => {
+                    console.log(`🚀 PreLink server running on port ${PORT}`);
+                });
+                
+                export default server;
+                
