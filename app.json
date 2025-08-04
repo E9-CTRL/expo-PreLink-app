@@ -25,6 +25,7 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to take your ID and selfie for verification.",
+        "NSMicrophoneUsageDescription": "This app may use the microphone while taking camera input.",
         "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to upload verification images.",
         "NSPhotoLibraryAddUsageDescription": "This app needs access to save captured images.",
         "ITSAppUsesNonExemptEncryption": false,
@@ -55,7 +56,8 @@
         }
       ],
       "expo-web-browser",
-      "expo-asset"
+      "expo-asset",
+      "react-native-vision-camera"
     ],
     "extra": {
       "eas": {

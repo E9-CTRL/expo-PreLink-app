@@ -18,6 +18,8 @@ import QRScannerScreen from './screens/QRScannerScreen';
 import VerificationScreen from './screens copy/VerificationScreen';
 import EmailEntryScreen from './screens/EmailEntryScreen';
 import OTPVerificationScreen from './screens/OTPVerificationScreen';
+import VerifyScreen from './screens/VerifyScreen';
+
 
 
 console.log('🧪 Loaded VerificationScreen is:', typeof VerificationScreen);
@@ -112,6 +114,7 @@ export default function AppNavigator({ userProfile, eventData, setEventData, hos
             <Stack.Screen name="EmailEntryScreen" component={EmailEntryScreen} options={{ title: 'NTU Email Login' }} />
             <Stack.Screen name="OTPVerificationScreen" component={OTPVerificationScreen} options={{ title: 'Enter Code' }} />
             <Stack.Screen name="VerificationScreen" component={VerificationScreen} />
+            <Stack.Screen name="VerifyScreen" component={require('./screens/VerifyScreen').default} />
             <Stack.Screen name="CreateProfile" component={CreateProfileScreen} />
             <Stack.Screen name="NoHostedEvent" component={NoHostedEventScreen} />
             <Stack.Screen name="NoRSVPEvent" component={NoRSVPEventScreen} />

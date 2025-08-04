@@ -55,8 +55,10 @@
     "react-native-dotenv": "^3.4.11",
     "react-native-gesture-handler": "~ 2.24.0",
     "react-native-get-random-values": "^1.11.0",
+    "react-native-image-rotate": "^2.1.0",
     "react-native-keyboard-aware-scroll-view": "^0.9.5",
     "react-native-maps": "1.20.1",
+    "react-native-orientation-locker": "^1.7.0",
     "react-native-paper": "^5.14.5",
     "react-native-qrcode-svg": "^6.3.15",
     "react-native-reanimated": "~3.17.4",
@@ -65,8 +67,11 @@
     "react-native-svg": "15.11.2",
     "react-native-url-polyfill": "^2.0.0",
     "react-native-uuid": "^2.0.3",
+    "react-native-vision-camera": "^4.7.1",
+    "react-native-vision-camera-rectangle-detector": "^0.1.0",
     "react-native-web": "^0.20.0",
-    "react-native-webview": "13.13.5"
+    "react-native-webview": "13.13.5",
+    "vision-camera-face-detector": "^0.1.8"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
