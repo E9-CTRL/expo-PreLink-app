@@ -55,8 +55,6 @@
           "cameraPermission": "Allow PreLink to use your camera to verify your ID and take a selfie."
         }
       ],
-      "expo-web-browser",
-      "expo-asset",
       [
         "react-native-vision-camera",
         {
@@ -65,8 +63,7 @@
             "vision-camera-detect-rectangles"
           ]
         }
-      ],
-      "react-native-reanimated/plugin"
+      ]
     ],
     "extra": {
       "eas": {
