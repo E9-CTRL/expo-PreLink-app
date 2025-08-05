@@ -21,8 +21,8 @@ import Orientation from 'react-native-orientation-locker';
 import Icon from 'react-native-vector-icons/Feather';
 
 // (stub imports — you'll need to install & configure these)
-import { scanFaces } from 'vision-camera-face-detector';
-import { detectRectangles } from 'vision-camera-detect-rectangles';
+import scanFaces from 'vision-camera-face-detector';
+import detectRectangles from 'react-native-vision-camera-rectangle-detector';
 
 const { width } = Dimensions.get('window');
 const BOX_RATIO = 0.8;    // width of box as % of screen

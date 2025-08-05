@@ -57,7 +57,15 @@
       ],
       "expo-web-browser",
       "expo-asset",
-      "react-native-vision-camera"
+      [
+        "react-native-vision-camera",
+        {
+          "frameProcessorPlugins": [
+            "vision-camera-face-detector",
+            "vision-camera-detect-rectangles"
+          ]
+        }
+      ]
     ],
     "extra": {
       "eas": {
