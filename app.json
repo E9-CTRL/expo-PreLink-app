@@ -65,7 +65,8 @@
             "vision-camera-detect-rectangles"
           ]
         }
-      ]
+      ],
+      "react-native-reanimated/plugin"
     ],
     "extra": {
       "eas": {
