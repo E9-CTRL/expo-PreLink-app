@@ -59,8 +59,7 @@
         "react-native-vision-camera",
         {
           "frameProcessorPlugins": [
-            "vision-camera-face-detector",
-            "vision-camera-detect-rectangles"
+            "vision-camera-face-detector"
           ]
         }
       ]
